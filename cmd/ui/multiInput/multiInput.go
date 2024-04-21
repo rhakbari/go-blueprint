@@ -89,7 +89,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "y":
 			if len(m.selected) == 1 {
-				m.choice.Update(m.choices[m.cursor].Title)
+				for selectedKey := range m.selected {
+					m.choice.Update(m.choices[selectedKey].Title)
+					m.cursor = selectedKey
+				}
 				return m, tea.Quit
 			}
 		}
@@ -120,6 +123,6 @@ func (m model) View() string {
 		s += fmt.Sprintf("%s [%s] %s\n%s\n\n", cursor, checked, title, description)
 	}
 
-	s += fmt.Sprintf("Press %s to confirm choice.\n", focusedStyle.Render("y"))
+	s += fmt.Sprintf("Press %s to confirm choice.\n\n", focusedStyle.Render("y"))
 	return s
 }

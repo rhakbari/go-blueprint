@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/pflag"
 )
@@ -14,12 +15,24 @@ const ProgramName = "go-blueprint"
 
 // NonInteractiveCommand creates the command string from a flagSet
 // to be used for getting the equivalent non-interactive shell command
-func NonInteractiveCommand(flagSet *pflag.FlagSet) string {
-	nonInteractiveCommand := ProgramName
+func NonInteractiveCommand(use string, flagSet *pflag.FlagSet) string {
+	nonInteractiveCommand := fmt.Sprintf("%s %s", ProgramName, use)
 
 	visitFn := func(flag *pflag.Flag) {
 		if flag.Name != "help" {
-			nonInteractiveCommand = fmt.Sprintf("%s --%s %s", nonInteractiveCommand, flag.Name, flag.Value.String())
+			if flag.Name == "feature" {
+				featureFlagsString := ""
+				// Creates string representation for the feature flags to be
+				// concatenated with the nonInteractiveCommand
+				for _, k := range strings.Split(flag.Value.String(), ",") {
+					if k != "" {
+						featureFlagsString += fmt.Sprintf(" --feature %s", k)
+					}
+				}
+				nonInteractiveCommand += featureFlagsString
+			} else {
+				nonInteractiveCommand = fmt.Sprintf("%s --%s %s", nonInteractiveCommand, flag.Name, flag.Value.String())
+			}
 		}
 	}
 
@@ -27,14 +40,6 @@ func NonInteractiveCommand(flagSet *pflag.FlagSet) string {
 	flagSet.VisitAll(visitFn)
 
 	return nonInteractiveCommand
-}
-
-func HasChangedFlag(flagSet *pflag.FlagSet) bool {
-	hasChangedFlag := false
-	flagSet.Visit(func(_ *pflag.Flag) {
-		hasChangedFlag = true
-	})
-	return hasChangedFlag
 }
 
 // ExecuteCmd provides a shorthand way to run a shell command
@@ -85,4 +90,29 @@ func GoFmt(appDir string) error {
 	}
 
 	return nil
+}
+
+func GoTidy(appDir string) error {
+	err := ExecuteCmd("go", []string{"mod", "tidy"}, appDir)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func CheckGitConfig(key string) (bool, error) {
+	cmd := exec.Command("git", "config", "--get", key)
+	if err := cmd.Run(); err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			// The command failed to run.
+			if exitError.ExitCode() == 1 {
+				// The 'git config --get' command returns 1 if the key was not found.
+				return false, nil
+			}
+		}
+		// Some other error occurred.
+		return false, err
+	}
+	// The command ran successfully, so the key is set.
+	return true, nil
 }
